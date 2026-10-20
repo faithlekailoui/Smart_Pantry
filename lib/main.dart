@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'VIEWS/pantry_home_view.dart'; // We will create this next
+import 'VIEWS/pantry_home_view.dart';
 
 void main() {
   runApp(
-      // ProviderScope is required for Riverpod state management
+      // ProviderScope is required for Riverpod state management to work
           const ProviderScope(
                 child: SmartPantryApp(),
                     ),

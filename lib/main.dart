@@ -1,30 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'VIEWS/pantry_home_view.dart';
+import 'package:smart_pantry/VIEWS/welcome_view.dart';
 
 void main() {
-  runApp(
-      // ProviderScope is required for Riverpod state management to work
-          const ProviderScope(
-                child: SmartPantryApp(),
-                    ),
-                      );
-                      }
+  runApp(const ProviderScope(child: MyApp()));
+}
 
-                      class SmartPantryApp extends StatelessWidget {
-                        const SmartPantryApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
-                          @override
-                            Widget build(BuildContext context) {
-                                return MaterialApp(
-                                      title: 'Smart Pantry',
-                                            debugShowCheckedModeBanner: false,
-                                                  theme: ThemeData(
-                                                          colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-                                                                  useMaterial3: true,
-                                                                        ),
-                                                                              home: const PantryHomeView(),
-                                                                                  );
-                                                                                    }
-                                                                                    }
-                                                                                    
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Sous-Chef AI',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.green,
+        useMaterial3: true,
+      ),
+      home: const WelcomeView(),
+    );
+  }
+}

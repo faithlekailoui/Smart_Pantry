@@ -10,7 +10,7 @@ class PantryNotifier extends StateNotifier<AsyncValue<List<Map<String, dynamic>>
           Future<void> loadItems() async {
               try {
                     state = const AsyncValue.loading();
-                          final items = await DatabaseHelper.instance.fetchAllIngrediants();
+                          final items = await DatabaseHelper.instance.fetchAllIngredients();
                                 state = AsyncValue.data(items);
                                     } catch (e, st) {
                                           state = AsyncValue.error(e, st);

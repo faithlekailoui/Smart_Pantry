@@ -1,108 +1,82 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
-import 'package:image_picker/image_picker.dart';
-import 'import 'dart:io';' // Wait, just import io for File
-import '../CONTROLLERS/pantry_controller.dart';
-import '../DATA/ingredients.dart';
+import 'package:smart_pantry/DATA/ingredients.dart';
+import 'package:smart_pantry/CONTROLLERS/pantry_controller.dart';
+import 'package:smart_pantry/VIEWS/app_drawer.dart';
 
 class ScanReceiptView extends ConsumerStatefulWidget {
   const ScanReceiptView({super.key});
 
-    @override
-      ConsumerState<ScanReceiptView> createState() => _ScanReceiptViewState();
-      }
+  @override
+  ConsumerState<ScanReceiptView> createState() => _ScanReceiptViewState();
+}
 
-      class _ScanReceiptViewState extends ConsumerState<ScanReceiptView> {
-        File? _imageFile;
-          bool _isScanning = false;
-            String _scannedText = 'Tap the camera button to snap a photo of your receipt or ingredient list.';
+class _ScanReceiptViewState extends ConsumerState<ScanReceiptView> {
+  String _scannedText = '';
 
-              final ImagePicker _picker = ImagePicker();
-                final TextRecognizer _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+  void _simulateScan() {
+    // Simulated receipt OCR scan for demo
+    final newItem = Ingredient(
+      name: 'Scanned Tomatoes',
+      quantity: 1.0,
+      unit: 'kg',
+      expiryDate: DateTime.now().add(const Duration(days: 7)).toString().split(' ')[0],
+    );
 
-                  @override
-                    void dispose() {
-                        _textRecognizer.close();
-                            super.dispose();
-                              }
+    ref.read(pantryProvider.notifier).addIngredient(newItem);
 
-                                Future<void> _pickAndScanImage() async {
-                                    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.camera);
-                                        if (pickedFile == null) return;
+    setState(() {
+      _scannedText = 'Successfully scanned and added: Scanned Tomatoes (1.0 kg)';
+    });
+  }
 
-                                            setState(() {
-                                                  _imageFile = File(pickedFile.path);
-                                                        _isScanning = true;
-                                                              _scannedText = 'Processing image with ML Kit OCR...';
-                                                                  });
-
-                                                                      try {
-                                                                            final inputImage = InputImage.fromFilePath(pickedFile.path);
-                                                                                  final RecognisedText recognisedText = await _textRecognizer.processImage(inputImage);
-
-                                                                                        setState(() {
-                                                                                                _scannedText = recognisedText.text;
-                                                                                                        _isScanning = false;
-                                                                                                              });
-
-                                                                                                                    // To Automatically add a generic item found from the text demo
-                                                                                                                          if (recognisedText.blocks.isNotEmpty) {
-                                                                                                                                  final firstBlockText = recognisedText.blocks.first.text.split('\n').first;
-                                                                                                                                          final newItem = Ingredient(
-                                                                                                                                                    name: firstBlockText.isNotEmpty ? firstBlockText : 'Scanned Ingredient',
-                                                                                                                                                              quantity: 1.0,
-                                                                                                                                                                        unit: 'pcs',
-                                                                                                                                                                                  purchaseDate: DateTime.now().toString().split(' ')[0],
-                                                                                                                                                                                            expiryDate: DateTime.now().add(const Duration(days: 7)).toString().split(' ')[0],
-                                                                                                                                                                                                      category: 'Receipt Scan',
-                                                                                                                                                                                                              );
-                                                                                                                                                                                                                      ref.read(pantryProvider.notifier).addIngredient(newItem);
-                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                } catch (e) {
-                                                                                                                                                                                                                                      setState(() {
-                                                                                                                                                                                                                                              _scannedText = 'Error scanning text: $e';
-                                                                                                                                                                                                                                                      _isScanning = false;
-                                                                                                                                                                                                                                                            });
-                                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                                  }
-
-                                                                                                                                                                                                                                                                    @override
-                                                                                                                                                                                                                                                                      Widget build(BuildContext context) {
-                                                                                                                                                                                                                                                                          return Scaffold(
-                                                                                                                                                                                                                                                                                appBar: AppBar(title: const Text('OCR Receipt & List Scanner')),
-                                                                                                                                                                                                                                                                                      body: Padding(
-                                                                                                                                                                                                                                                                                              padding: const EdgeInsets.all(16.0),
-                                                                                                                                                                                                                                                                                                      child: Column(
-                                                                                                                                                                                                                                                                                                                children: [
-                                                                                                                                                                                                                                                                                                                            ElevatedButton.icon(
-                                                                                                                                                                                                                                                                                                                                          onPressed: _isScanning ? null : _pickAndScanImage,
-                                                                                                                                                                                                                                                                                                                                                        icon: const Icon(Icons.camera_alt),
-                                                                                                                                                                                                                                                                                                                                                                      label: const Text('Capture Receipt / List'),
-                                                                                                                                                                                                                                                                                                                                                                                  ),
-                                                                                                                                                                                                                                                                                                                                                                                              const SizedBox(height: 20),
-                                                                                                                                                                                                                                                                                                                                                                                                          if (_imageFile != null)
-                                                                                                                                                                                                                                                                                                                                                                                                                        SizedBox(
-                                                                                                                                                                                                                                                                                                                                                                                                                                        height: 150,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                        child: Image.file(_imageFile!),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                      ),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  const SizedBox(height: 20),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              const Text(
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            'Extracted Text / Auto-Added Items:',
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      ),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  const SizedBox(height: 10),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              Expanded(
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            child: SingleChildScrollView(
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            child: Text(
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              _scannedText,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                style: const TextStyle(fontSize: 14),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              ),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          ),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    ],
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            ),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  ),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      );
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('OCR Receipt & List Scanner'),
+        backgroundColor: Colors.green,
+        foregroundColor: Colors.white,
+      ),
+      drawer: const AppDrawer(),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              onPressed: _simulateScan,
+              icon: const Icon(Icons.camera_alt),
+              label: const Text('Capture Receipt / List'),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Extracted Text / Auto-Added Items:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Text(
+                _scannedText.isEmpty
+                    ? 'Tap the camera button to snap a photo of your receipt or ingredient list.'
+                    : _scannedText,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

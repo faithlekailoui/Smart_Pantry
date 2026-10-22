@@ -1,3 +1,5 @@
+// ignore_for_file: await_only_futures
+
 import 'dart:async';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
@@ -68,10 +70,10 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> fetchExpiringSoon() async {
     final db = await instance.database;
     return await db.rawQuery('''
-      SELECT *, (julianday(expiry_date) - julianday('date(\'now\')')) AS days_remaining 
+      SELECT *, (julianday(expiry_date) - julianday('date('now')')) AS days_remaining 
       FROM pantry_items 
-      WHERE (julianday(expiry_date) - julianday('date(\'now\')')) <= 3 
-      AND (julianday(expiry_date) - julianday('date(\'now\')')) >= 0
+      WHERE (julianday(expiry_date) - julianday('date('now')')) <= 3 
+      AND (julianday(expiry_date) - julianday('date('now')')) >= 0
       ORDER BY expiry_date ASC
     ''');
   }

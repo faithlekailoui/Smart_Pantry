@@ -31,6 +31,19 @@ class PantryNotifier extends StateNotifier<List<Ingredient>> {
     state = [...state, newItem];
   }
 
+  Future<void> updateIngredient(int index, Ingredient updatedItem) async {
+    try {
+      if (updatedItem.id != null) {
+        await DatabaseHelper.instance.updateIngredient(updatedItem.toMap());
+      }
+    } catch (e) {
+      print('Web fallback updating: $e');
+    }
+    final newState = List<Ingredient>.from(state);
+    newState[index] = updatedItem;
+    state = newState;
+  }
+
   Future<void> removeIngredient(int id) async {
     try {
       await DatabaseHelper.instance.deleteIngredient(id);

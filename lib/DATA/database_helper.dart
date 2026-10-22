@@ -1,8 +1,5 @@
-// ignore_for_file: await_only_futures
-
-import 'dart:async';
-import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -22,76 +19,92 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE activity_logs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              action TEXT NOT NULL,
+              details TEXT NOT NULL,
+              timestamp TEXT NOT NULL
+            )
+          ''');
+        }
+      },
     );
   }
 
-  Future _createDB(Database db, int version) async {
-    // 1. Pantry Inventory Table
+  Future<void> _createDB(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE pantry_items (
+      CREATE TABLE ingredients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         quantity REAL NOT NULL,
         unit TEXT NOT NULL,
-        purchase_date TEXT NOT NULL,
-        expiry_date TEXT NOT NULL,
-        is_opened INTEGER DEFAULT 0,
-        category TEXT DEFAULT 'Other'
+        expiryDate TEXT NOT NULL
       )
     ''');
 
-    // 2. Saved Recipes Table (Caching Gemini output to save API limits)
     await db.execute('''
-      CREATE TABLE saved_recipes (
+      CREATE TABLE activity_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        ingredients_used TEXT NOT NULL,
-        instructions TEXT NOT NULL,
-        generated_date TEXT NOT NULL
+        action TEXT NOT NULL,
+        details TEXT NOT NULL,
+        timestamp TEXT NOT NULL
       )
     ''');
   }
 
-  // --- CRUD OPERATIONS FOR PANTRY ITEMS ---
-
+  // Ingredient Operations
   Future<int> insertIngredient(Map<String, dynamic> row) async {
     final db = await instance.database;
-    return await db.insert('pantry_items', row);
+    final id = await db.insert('ingredients', row);
+    await logActivity('ADDED', 'Added item: ${row['name']} (${row['quantity']} ${row['unit']})');
+    return id;
   }
 
   Future<List<Map<String, dynamic>>> fetchAllIngredients() async {
     final db = await instance.database;
-    return await db.query('pantry_items', orderBy: 'expiry_date ASC');
-  }
-
-  // ACADEMIC VALUE ADD: Native SQL evaluation query for expiring items
-  Future<List<Map<String, dynamic>>> fetchExpiringSoon() async {
-    final db = await instance.database;
-    return await db.rawQuery('''
-      SELECT *, (julianday(expiry_date) - julianday('date('now')')) AS days_remaining 
-      FROM pantry_items 
-      WHERE (julianday(expiry_date) - julianday('date('now')')) <= 3 
-      AND (julianday(expiry_date) - julianday('date('now')')) >= 0
-      ORDER BY expiry_date ASC
-    ''');
+    return await db.query('ingredients');
   }
 
   Future<int> updateIngredient(Map<String, dynamic> row) async {
     final db = await instance.database;
-    int id = row['id'];
-    return await db.update('pantry_items', row, where: 'id = ?', whereArgs: [id]);
+    final id = row['id'];
+    final result = await db.update('ingredients', row, where: 'id = ?', whereArgs: [id]);
+    await logActivity('EDITED', 'Updated item: ${row['name']}');
+    return result;
   }
 
   Future<int> deleteIngredient(int id) async {
     final db = await instance.database;
-    return await db.delete('pantry_items', where: 'id = ?', whereArgs: [id]);
+    final result = await db.delete('ingredients', where: 'id = ?', whereArgs: [id]);
+    await logActivity('DELETED', 'Removed item ID: $id');
+    return result;
   }
 
-  Future close() async {
-    final db = await _database;
-    if (db != null) await db.close();
+  // Audit Logging
+  Future<void> logActivity(String action, String details) async {
+    try {
+      final db = await instance.database;
+      await db.insert('activity_logs', {
+        'action': action,
+        'details': details,
+        'timestamp': DateTime.now().toIso8601String().split('.').first,
+      });
+    } catch (e) {
+      // Ignored for web fallback state
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchActivityLogs() async {
+    try {
+      final db = await instance.database;
+      return await db.query('activity_logs', orderBy: 'id DESC');
+    } catch (e) {
+      return [];
+    }
   }
 }
-

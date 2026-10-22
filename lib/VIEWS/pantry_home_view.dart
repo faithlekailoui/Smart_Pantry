@@ -90,6 +90,14 @@ class PantryHomeView extends ConsumerWidget {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Quick Action: Consume / Reduce Quantity
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline, color: Colors.orange),
+                          tooltip: 'Use 1 item',
+                          onPressed: () {
+                            ref.read(pantryProvider.notifier).consumeIngredient(index, 1.0);
+                          },
+                        ),
                         IconButton(
                           icon: const Icon(Icons.edit_outlined, color: Colors.blue),
                           onPressed: () => _showEditDialog(context, ref, item, index),
@@ -97,12 +105,7 @@ class PantryHomeView extends ConsumerWidget {
                         IconButton(
                           icon: const Icon(Icons.delete_outline, color: Colors.red),
                           onPressed: () {
-                            if (item.id != null) {
-                              ref.read(pantryProvider.notifier).removeIngredient(item.id!);
-                            } else {
-                              // Direct remove for web state
-                              ref.read(pantryProvider.notifier).removeIngredient(index);
-                            }
+                            ref.read(pantryProvider.notifier).removeIngredientAt(index);
                           },
                         ),
                       ],

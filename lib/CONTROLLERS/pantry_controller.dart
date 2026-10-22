@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smart_pantry/DATA/ingredients.dart';
 import 'package:smart_pantry/DATA/database_helper.dart';
@@ -18,7 +19,7 @@ class PantryNotifier extends StateNotifier<List<Ingredient>> {
         state = rawData.map((map) => Ingredient.fromMap(map)).toList();
       }
     } catch (e) {
-      print('Web fallback loading: $e');
+      debugPrint('Web fallback loading: $e');
     }
   }
 
@@ -26,7 +27,7 @@ class PantryNotifier extends StateNotifier<List<Ingredient>> {
     try {
       await DatabaseHelper.instance.insertIngredient(newItem.toMap());
     } catch (e) {
-      print('Web fallback adding: $e');
+      debugPrint('Web fallback adding: $e');
     }
     state = [...state, newItem];
   }
@@ -37,19 +38,53 @@ class PantryNotifier extends StateNotifier<List<Ingredient>> {
         await DatabaseHelper.instance.updateIngredient(updatedItem.toMap());
       }
     } catch (e) {
-      print('Web fallback updating: $e');
+      debugPrint('Web fallback updating: $e');
     }
     final newState = List<Ingredient>.from(state);
     newState[index] = updatedItem;
     state = newState;
   }
 
-  Future<void> removeIngredient(int id) async {
-    try {
-      await DatabaseHelper.instance.deleteIngredient(id);
-    } catch (e) {
-      print('Web fallback deletion: $e');
+  // Feature: Consume product quantity when used in cooking
+  Future<void> consumeIngredient(int index, double amount) async {
+    final item = state[index];
+    final double newQty = item.quantity - amount;
+
+    if (newQty <= 0) {
+      // Auto-remove item when completely used up
+      await removeIngredientAt(index);
+    } else {
+      final updated = Ingredient(
+        id: item.id,
+        name: item.name,
+        quantity: double.parse(newQty.toStringAsFixed(1)),
+        unit: item.unit,
+        expiryDate: item.expiryDate,
+      );
+      await updateIngredient(index, updated);
+      await DatabaseHelper.instance.logActivity('CONSUMED', 'Used $amount ${item.unit} of ${item.name}');
     }
-    state = state.where((item) => item.id != id).toList();
+  }
+
+  Future<void> removeIngredientAt(int index) async {
+    final item = state[index];
+    if (item.id != null) {
+      try {
+        await DatabaseHelper.instance.deleteIngredient(item.id!);
+      } catch (e) {
+        debugPrint('Web deletion error: $e');
+      }
+    }
+    state = state.whereIndexed((i, element) => i != index).toList();
+  }
+}
+
+extension ListIndexedExtension<E> on List<E> {
+  List<E> whereIndexed(bool Function(int index, E element) test) {
+    final List<E> result = [];
+    for (var i = 0; i < length; i++) {
+      if (test(i, this[i])) result.add(this[i]);
+    }
+    return result;
   }
 }

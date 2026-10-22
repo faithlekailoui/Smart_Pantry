@@ -3,6 +3,8 @@ import 'package:smart_pantry/VIEWS/pantry_home_view.dart';
 import 'package:smart_pantry/VIEWS/add_ingredient_view.dart';
 import 'package:smart_pantry/VIEWS/scan_receipt_view.dart';
 import 'package:smart_pantry/VIEWS/recipe_view.dart';
+import 'package:smart_pantry/VIEWS/welcome_view.dart';
+import 'package:smart_pantry/VIEWS/profile_view.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -13,27 +15,15 @@ class AppDrawer extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.green, Colors.teal],
-              ),
+         const UserAccountsDrawerHeader(
+            decoration:  BoxDecoration(
+              gradient: LinearGradient(colors: [Colors.green, Colors.teal]),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(Icons.eco, size: 48, color: Colors.white),
-                SizedBox(height: 10),
-                Text(
-                  'Sous-Chef AI',
-                  style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  'Zero-Waste Kitchen Assistant',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
-                ),
-              ],
+            accountName:  Text('Sous-Chef AI User', style: TextStyle(fontWeight: FontWeight.bold)),
+            accountEmail:  Text('zero-waste@smartpantry.ai'),
+            currentAccountPicture:  CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Icon(Icons.person, color: Colors.green, size: 36),
             ),
           ),
           ListTile(
@@ -66,6 +56,23 @@ class AppDrawer extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const RecipeView()),
+            ),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.account_circle, color: Colors.grey),
+            title: const Text('My Profile'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileView()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.home_outlined, color: Colors.grey),
+            title: const Text('Welcome / Onboarding'),
+            onTap: () => Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const WelcomeView()),
             ),
           ),
         ],

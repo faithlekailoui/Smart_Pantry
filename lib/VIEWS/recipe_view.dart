@@ -18,17 +18,17 @@ class _RecipeViewState extends ConsumerState<RecipeView> {
   Future<void> _fetchRecipe() async {
     setState(() => _isLoading = true);
     final ingredients = ref.read(pantryProvider);
-    final ingredientList = ingredients.map((i) => '${i.quantity} ${i.unit} ${i.name}').join(', ');
 
-    if (ingredientList.isEmpty) {
+    if (ingredients.isEmpty) {
       setState(() {
         _isLoading = false;
-        _generatedRecipe = 'Your pantry is currently empty! Add ingredients first to generate recipes.';
+        _generatedRecipe =
+            'Your pantry is currently empty! Add ingredients first to generate zero-waste recipes.';
       });
       return;
     }
 
-    final recipeText = await AIService.generateRecipe(ingredientList);
+    final recipeText = await AIService.generateRecipe(ingredients);
     setState(() {
       _generatedRecipe = recipeText;
       _isLoading = false;
@@ -52,12 +52,17 @@ class _RecipeViewState extends ConsumerState<RecipeView> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.amber.shade700,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: _isLoading ? null : _fetchRecipe,
               icon: const Icon(Icons.auto_awesome),
-              label: const Text('Generate Recipe from Pantry', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              label: const Text(
+                'Generate Zero-Waste Recipe',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
             const SizedBox(height: 20),
             if (_isLoading)
@@ -67,10 +72,12 @@ class _RecipeViewState extends ConsumerState<RecipeView> {
                 child: SingleChildScrollView(
                   child: Card(
                     elevation: 3,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
-                      child: Text(_generatedRecipe, style: const TextStyle(fontSize: 15, height: 1.5)),
+                      child: Text(_generatedRecipe,
+                          style: const TextStyle(fontSize: 15, height: 1.5)),
                     ),
                   ),
                 ),
@@ -79,7 +86,7 @@ class _RecipeViewState extends ConsumerState<RecipeView> {
               const Expanded(
                 child: Center(
                   child: Text(
-                    'Tap the button above to generate a zero-waste recipe using your stored items!',
+                    'Tap the button above to generate a customized zero-waste recipe focused on your expiring ingredients!',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey, fontSize: 15),
                   ),

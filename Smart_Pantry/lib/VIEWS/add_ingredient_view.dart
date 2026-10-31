@@ -4,6 +4,7 @@ import 'package:smart_pantry/CONTROLLERS/pantry_controller.dart';
 import 'package:smart_pantry/DATA/ingredients.dart';
 import 'package:smart_pantry/DATA/shelf_life.dart';
 import 'package:smart_pantry/VIEWS/common_widgets.dart';
+import 'package:smart_pantry/VIEWS/expiry_scan_helper.dart';
 
 /// Add a new ingredient, or edit one when [existing] is given.
 class IngredientFormView extends ConsumerStatefulWidget {
@@ -76,6 +77,15 @@ class _IngredientFormViewState extends ConsumerState<IngredientFormView> {
     if (picked == null) return;
     setState(() {
       _expiry = DateTime.utc(picked.year, picked.month, picked.day);
+      _dateTouched = true;
+    });
+  }
+
+  Future<void> _scanDate() async {
+    final date = await scanExpiryDate(context);
+    if (date == null || !mounted) return;
+    setState(() {
+      _expiry = date;
       _dateTouched = true;
     });
   }
@@ -172,7 +182,18 @@ class _IngredientFormViewState extends ConsumerState<IngredientFormView> {
                 child: InputDecorator(
                   decoration: InputDecoration(
                     labelText: 'Expiry date',
-                    suffixIcon: const Icon(Icons.calendar_month),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Scan the expiry date on the package',
+                          icon: const Icon(Icons.document_scanner_outlined),
+                          onPressed: _scanDate,
+                        ),
+                        const Icon(Icons.calendar_month),
+                        const SizedBox(width: 12),
+                      ],
+                    ),
                     helperText: _dateTouched
                         ? null
                         : 'Estimated from the item name - tap to change',

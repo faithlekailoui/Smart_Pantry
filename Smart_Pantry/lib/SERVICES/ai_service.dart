@@ -1,29 +1,29 @@
 // lib/SERVICES/ai_service.dart
 //
-// Recipe generation, grounded in the pantry ("local RAG"): the prompt is built
-// ONLY from rows read from the local database, and the model is told to use
-// nothing else. If the network/API is unavailable the app falls back to a
-// rule-based recipe, and the UI says which one the user is looking at.
+// The optional "AI chef". The recipe book (recipe_engine.dart) is the main
+// source of recipes and works offline. This service asks Gemini for ONE extra
+// idea built from the mystery box, forces a structured JSON answer, and then
+// runs RecipeValidator on it. An answer that fails the check is never shown.
 //
-// Configure at build time - the key is NOT stored in source code:
+// Configure at build time (the key is NOT stored in source code):
 //   flutter run --dart-define=GEMINI_API_KEY=your_key
-//   flutter build apk --release --dart-define=GEMINI_API_KEY=your_key
-// Optional: --dart-define=GEMINI_MODEL=<model name>   (default: gemini-flash-latest)
+// Optional: --dart-define=GEMINI_MODEL=<model name>  (default: gemini-flash-latest)
 //
 // NOTE: a key compiled into an app can be extracted from the APK. That is fine
-// for a prototype/demo; a production app should call Gemini through a backend.
+// for a prototype; a production app should call Gemini through a backend.
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:smart_pantry/DATA/ingredients.dart';
+import 'package:smart_pantry/SERVICES/recipe_engine.dart';
+import 'package:smart_pantry/SERVICES/recipe_validator.dart';
 
-class RecipeResult {
-  final String text;
-  final bool fromAI;
-  final String? note;
-  const RecipeResult(this.text, {required this.fromAI, this.note});
+class AiOutcome {
+  final RecipeCard? card;
+  final String? message;
+  const AiOutcome({this.card, this.message});
 }
 
 class AIService {
@@ -32,53 +32,37 @@ class AIService {
   static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
   static const String _model =
       String.fromEnvironment('GEMINI_MODEL', defaultValue: 'gemini-flash-latest');
-  static const Duration _timeout = Duration(seconds: 25);
-  static const Duration _minInterval = Duration(seconds: 4); // throttling
-  static const int _maxItemsInPrompt = 25;
+  static const Duration _timeout = Duration(seconds: 30);
+  static const Duration _minInterval = Duration(seconds: 4);
+  static const int _maxItems = 12;
 
-  // Client-side cache: same pantry -> same answer, no extra API call.
-  static final Map<String, String> _cache = {};
+  static bool get isConfigured => _apiKey.isNotEmpty;
+
+  static final Map<String, RecipeCard> _cache = {};
   static DateTime? _lastCall;
 
-  static Future<RecipeResult> generateRecipe(
-    List<Ingredient> all, {
+  static Future<AiOutcome> suggest(
+    List<Ingredient> box, {
+    String meal = 'any',
     bool forceRefresh = false,
   }) async {
-    if (all.isEmpty) {
-      return const RecipeResult(
-        'Your pantry is empty. Add some ingredients first and I will build a zero-waste recipe from them.',
-        fromAI: false,
-      );
-    }
-
-    // Food safety: never build recipes from expired items.
-    final usable = all.where((i) => !i.isExpired).toList()
+    final usable = box.where((i) => !i.isExpired).toList()
       ..sort((a, b) => a.daysLeft.compareTo(b.daysLeft));
     if (usable.isEmpty) {
-      return const RecipeResult(
-        'Everything in your pantry has passed its expiry date, so I will not build a recipe from it. '
-        'Please check and discard it safely, then add fresh items.',
-        fromAI: false,
-      );
+      return const AiOutcome(message: 'Put at least one item that has not expired in the box first.');
+    }
+    if (!isConfigured) {
+      return const AiOutcome(
+          message: 'The AI chef needs a Gemini API key in this build. The recipe book above works without it.');
     }
 
-    final signature =
-        usable.map((i) => '${i.name}|${i.expiryDate}|${i.quantity}').join(';');
+    final signature = '$meal|${usable.map((i) => '${i.name}:${i.expiryDate}').join(';')}';
     final cached = _cache[signature];
-    if (!forceRefresh && cached != null) {
-      return RecipeResult(cached,
-          fromAI: true, note: 'Saved result for the same pantry (no new API call).');
-    }
-
-    if (_apiKey.isEmpty) {
-      return _fallback(usable,
-          'No Gemini API key was provided to this build, so this is an offline recipe.');
-    }
+    if (!forceRefresh && cached != null) return AiOutcome(card: cached);
 
     final now = DateTime.now();
     if (_lastCall != null && now.difference(_lastCall!) < _minInterval) {
-      return _fallback(usable,
-          'Please wait a few seconds between AI requests. Showing an offline recipe meanwhile.');
+      return const AiOutcome(message: 'Please wait a few seconds between AI requests.');
     }
     _lastCall = now;
 
@@ -95,91 +79,104 @@ class AIService {
               'contents': [
                 {
                   'parts': [
-                    {'text': _buildPrompt(usable)}
+                    {'text': _prompt(usable.take(_maxItems).toList(), meal)}
                   ]
                 }
               ],
-              'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 900},
+              'generationConfig': {
+                'temperature': 0.6,
+                'maxOutputTokens': 4096,
+                'responseMimeType': 'application/json',
+                'responseSchema': _schema,
+              },
             }),
           )
           .timeout(_timeout);
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final candidates = data['candidates'] as List?;
-        final parts = (candidates != null && candidates.isNotEmpty)
-            ? (candidates.first['content']?['parts'] as List?)
-            : null;
-        final text = parts?.map((p) => (p as Map)['text'] ?? '').join().trim();
-        if (text != null && text.isNotEmpty) {
-          _cache[signature] = text;
-          return RecipeResult(text, fromAI: true);
-        }
-        return _fallback(usable, 'The AI returned an empty answer. Showing an offline recipe.');
+      if (response.statusCode != 200) {
+        debugPrint('Gemini HTTP ${response.statusCode}: ${response.body}');
+        final reason = switch (response.statusCode) {
+          400 || 403 => 'The API key or request was rejected.',
+          404 => 'The model "$_model" was not found - check GEMINI_MODEL.',
+          429 => 'The free API quota was reached.',
+          _ => 'The AI service returned error ${response.statusCode}.',
+        };
+        return AiOutcome(message: reason);
       }
 
-      debugPrint('Gemini HTTP ${response.statusCode}: ${response.body}');
-      final reason = switch (response.statusCode) {
-        400 || 403 => 'The API key was rejected.',
-        404 => 'The model "$_model" was not found - check GEMINI_MODEL.',
-        429 => 'The free API quota was reached.',
-        _ => 'The AI service returned error ${response.statusCode}.',
-      };
-      return _fallback(usable, '$reason Showing an offline recipe.');
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final candidates = data['candidates'] as List?;
+      final parts = (candidates != null && candidates.isNotEmpty)
+          ? (candidates.first['content']?['parts'] as List?)
+          : null;
+      var text = parts?.map((p) => (p as Map)['text'] ?? '').join().trim() ?? '';
+      text = text.replaceAll(RegExp(r'^```(json)?'), '').replaceAll(RegExp(r'```$'), '').trim();
+      if (text.isEmpty) {
+        return const AiOutcome(message: 'The AI returned an empty answer. Try again.');
+      }
+
+      final json = jsonDecode(text) as Map<String, dynamic>;
+      final result = RecipeValidator.check(json, usable);
+      if (!result.isOk) {
+        return AiOutcome(
+            message: 'The AI idea was not shown because ${result.problem}. Tap again for another idea.');
+      }
+      _cache[signature] = result.card!;
+      return AiOutcome(card: result.card);
     } on TimeoutException {
-      return _fallback(usable, 'The AI took too long to answer. Showing an offline recipe.');
+      return const AiOutcome(message: 'The AI took too long to answer. Try again.');
+    } on FormatException {
+      return const AiOutcome(message: 'The AI answer could not be read. Tap again for another idea.');
     } catch (e) {
       debugPrint('Gemini call failed: $e');
-      return _fallback(usable, 'You appear to be offline. Showing an offline recipe.');
+      return const AiOutcome(message: 'You appear to be offline. The recipe book still works.');
     }
   }
 
-  static String _buildPrompt(List<Ingredient> usable) {
-    final lines = usable
-        .take(_maxItemsInPrompt)
+  static const Map<String, dynamic> _schema = {
+    'type': 'OBJECT',
+    'properties': {
+      'title': {'type': 'STRING'},
+      'minutes': {'type': 'INTEGER'},
+      'servings': {'type': 'INTEGER'},
+      'ingredients': {
+        'type': 'ARRAY',
+        'items': {
+          'type': 'OBJECT',
+          'properties': {
+            'name': {'type': 'STRING'},
+            'amount': {'type': 'STRING'},
+            'source': {'type': 'STRING'},
+          },
+          'required': ['name', 'amount', 'source'],
+        },
+      },
+      'steps': {
+        'type': 'ARRAY',
+        'items': {'type': 'STRING'},
+      },
+      'tip': {'type': 'STRING'},
+    },
+    'required': ['title', 'minutes', 'servings', 'ingredients', 'steps'],
+  };
+
+  static String _prompt(List<Ingredient> box, String meal) {
+    final lines = box
         .map((i) => '- ${i.name}, ${i.quantityLabel}, ${Ingredient.labelForDays(i.daysLeft).toLowerCase()}')
         .join('\n');
+    final mealLine = meal == 'any' ? '' : 'The dish should suit $meal.\n';
     return '''
-You are Sous-Chef AI, a zero-waste home-cooking assistant for a Kenyan household.
-Use ONLY the ingredients in the pantry list below, plus basic staples: water, salt, pepper and cooking oil.
-Do not invent or assume any other ingredient. Prioritise the items that expire soonest.
-
-PANTRY (item, quantity, expiry):
+You are an experienced home cook in Nairobi, Kenya. This is a MasterChef-style "mystery box" challenge for a household.
+Cook ONE real dish that Kenyan families actually eat, for example ugali na sukuma wiki, githeri, a stew, pilau, chapati, mandazi, mayai, kachumbari, uji, chai or mukimo.
+Use at least one item from the MYSTERY BOX, and prefer the items that expire first. You do not have to use every item; leave out items that do not belong in the same dish.
+These pantry staples are always available: water, salt, cooking oil, black pepper and sugar (use source "staple").
+You may add at most 2 other common kitchen extras such as onion, tomato, garlic or royco (use source "extra"). Items from the box use source "pantry".
+Rules: only combine ingredients that are normally eaten together. Use real cooking methods with heat levels and times. Never wash, boil or soak bread. Use metric amounts. Give 3 to 7 short steps.
+$mealLine
+MYSTERY BOX (item, quantity, expiry):
 $lines
 
-Write ONE simple recipe in plain text. Do not use markdown symbols such as * or #.
-Format exactly like this:
-Title (first line)
-Uses soon-to-expire: (the urgent items this recipe rescues)
-Ingredients: (with amounts, only from the pantry list and staples)
-Steps: (numbered, at most 6 short steps)
-Waste tip: (one sentence on storing or reusing leftovers)
+Return only the JSON recipe.
 ''';
-  }
-
-  static RecipeResult _fallback(List<Ingredient> usable, String note) {
-    final urgent = usable.first;
-    final others = usable.skip(1).take(3).map((i) => i.name).toList();
-    final otherText = others.isEmpty ? 'a pinch of salt' : others.join(', ');
-    final text = '''
-${urgent.name} Rescue Pan
-
-Uses soon-to-expire: ${urgent.name} (${urgent.quantityLabel}) - ${Ingredient.labelForDays(urgent.daysLeft).toLowerCase()}.
-
-Ingredients:
-- ${urgent.quantityLabel} ${urgent.name}
-- $otherText
-- 1 tbsp cooking oil, salt and pepper
-
-Steps:
-1. Wash and chop the ${urgent.name} first, before the other items.
-2. Heat the oil in a pan on medium heat.
-3. Cook the ${urgent.name} for 3-5 minutes until it softens.
-4. Add ${others.isEmpty ? 'a splash of water' : others.join(', ')} and cook until tender.
-5. Season with salt and pepper, then serve hot.
-
-Waste tip: cook extra and refrigerate the leftovers for tomorrow's lunch.
-''';
-    return RecipeResult(text, fromAI: false, note: note);
   }
 }

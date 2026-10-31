@@ -46,7 +46,7 @@ class DatabaseHelper {
   DatabaseHelper._();
   static final DatabaseHelper instance = DatabaseHelper._();
 
-  static const String _dbName = 'smart_pantry.db';
+  static const String _dbName = 'sous_chef_pantry.db';
   static const int _dbVersion = 4;
 
   Future<Database>? _dbFuture;

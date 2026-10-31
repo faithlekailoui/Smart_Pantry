@@ -62,7 +62,7 @@ class _StartupError extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              'Smart_pantry AI could not open its database.\n\n$error\n\n'
+              'Sous-Chef AI could not open its database.\n\n$error\n\n'
               'This build stores data in SQLite, which needs the Android/iOS app '
               '(it does not run in a web browser).',
               textAlign: TextAlign.center,

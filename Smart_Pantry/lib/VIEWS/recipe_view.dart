@@ -167,7 +167,7 @@ class _RecipeViewState extends ConsumerState<RecipeView> {
               style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           Text(
-            'Items closest to expiry are already in the box. Tap to swap. Salt, oil, water, pepper and sugar are always allowed, like the MasterChef pantry.',
+            'Items closest to expiry are already in the box. Tap to swap. Salt, oil, water, pepper and sugar are always allowed.',
             style: TextStyle(color: Colors.grey.shade700),
           ),
           const SizedBox(height: 12),

@@ -36,7 +36,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Sous-Chef AI',
+      title: 'Smart Pantry',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
